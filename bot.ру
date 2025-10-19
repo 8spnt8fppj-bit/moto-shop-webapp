@@ -1,0 +1,711 @@
+import os
+import logging
+import sqlite3
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from dotenv import load_dotenv
+
+# Загрузка переменных окружения из .env файла
+load_dotenv()
+
+# === НАСТРОЙКИ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ===
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+YANDEX_API_KEY = os.getenv('YANDEX_API_KEY')
+YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID')
+ADMIN_ID = int(os.getenv('ADMIN_ID', '1037687787'))
+CHANNEL_ID = os.getenv('CHANNEL_ID', '@moto_zapchasti_2025')
+AVITO_PROFILE_URL = os.getenv('AVITO_PROFILE_URL', 'https://www.avito.ru/brands/2ed22a54a96def6579e6debbaddd4441')
+
+# Проверка обязательных переменных
+if not all([BOT_TOKEN, YANDEX_API_KEY, YANDEX_FOLDER_ID]):
+    raise ValueError("Не установлены обязательные переменные окружения: BOT_TOKEN, YANDEX_API_KEY, YANDEX_FOLDER_ID")
+
+AVITO_PROFILE_NAME = "VALERIYA market"
+
+# URL для Web App (ваш GitHub Pages)
+WEB_APP_URL = "https://8spnt8fppj-bit.github.io/moto-shop-webapp/"
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# Получаем текущую директорию
+current_dir = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(current_dir, 'moto_shop.db')
+
+# === YANDEX GPT ГЕНЕРАТОР ===
+class YandexGPTGenerator:
+    def __init__(self, api_key, folder_id):
+        self.api_key = api_key
+        self.folder_id = folder_id
+        self.url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+    
+    def generate_product_description(self, product_name, category):
+        headers = {
+            "Authorization": f"Api-Key {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        prompt = f"""
+        Создай продающее описание для товара "{product_name}" в категории "{category}".
+
+        Формат:
+        🏍️ [Заголовок с эмодзи]
+        
+        [Краткое описание преимуществ]
+        
+        🔧 Характеристики:
+        • [характеристика 1]
+        • [характеристика 2] 
+        • [характеристика 3]
+        
+        💡 Преимущества:
+        • [преимущество 1]
+        • [преимущество 2]
+        
+        🚀 [Призыв к действию]
+        
+        Используй эмодзи, будь дружелюбным и профессиональным.
+        """
+        
+        data = {
+            "modelUri": f"gpt://{self.folder_id}/yandexgpt/latest",
+            "completionOptions": {
+                "stream": False,
+                "temperature": 0.7,
+                "maxTokens": 1000
+            },
+            "messages": [
+                {
+                    "role": "system", 
+                    "text": "Ты эксперт по мото-запчастям. Создавай качественные описания товаров для Telegram канала."
+                },
+                {
+                    "role": "user",
+                    "text": prompt
+                }
+            ]
+        }
+        
+        try:
+            response = requests.post(self.url, headers=headers, json=data, timeout=30)
+            if response.status_code == 200:
+                result = response.json()
+                return result['result']['alternatives'][0]['message']['text']
+            else:
+                logging.error(f"Yandex API error: {response.status_code}")
+                return self.get_fallback_description(product_name, category)
+        except Exception as e:
+            logging.error(f"Yandex API connection error: {str(e)}")
+            return self.get_fallback_description(product_name, category)
+    
+    def get_fallback_description(self, product_name, category):
+        return f"""🏍️ {product_name}
+
+Качественная запчасть для вашего мотоцикла в категории {category}.
+
+🔧 Характеристики:
+• Высокое качество материалов
+• Совместимость с большинством моделей
+• Простота установки
+
+💡 Преимущества:
+• Надежность и долговечность
+• Отличное соотношение цены и качества
+• Гарантия производителя
+
+🚀 Закажите сейчас и улучшите свой мотоцикл!"""
+
+# === БАЗА ДАННЫХ ===
+def init_db():
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INTEGER,
+                name TEXT NOT NULL,
+                description TEXT,
+                price INTEGER,
+                photo TEXT,
+                published BOOLEAN DEFAULT FALSE,
+                FOREIGN KEY (category_id) REFERENCES categories (id)
+            )
+        ''')
+        
+        # Только две категории: Тюнинг и Карбюраторы
+        categories = [
+            (1, '🏍️ Тюнинг'),
+            (2, '🛠️ Карбюраторы')
+        ]
+        
+        # Очищаем старые категории и добавляем новые
+        cursor.execute("DELETE FROM categories")
+        for cat_id, cat_name in categories:
+            cursor.execute("INSERT INTO categories (id, name) VALUES (?, ?)", (cat_id, cat_name))
+        
+        # Добавляем тестовый товар - карбюратор Nibbi PWK 34 YJ
+        cursor.execute("""
+            INSERT OR IGNORE INTO products (id, category_id, name, description, price, photo) 
+            VALUES (1, 2, 'Карбюратор Nibbi PWK 34 YJ', 
+            '🏍️ Карбюратор Nibbi PWK 34 YJ
+
+Высокопроизводительный карбюратор для спортивных мотоциклов.
+
+🔧 Характеристики:
+• Диаметр: 34мм
+• Тип: PWK
+• Совместимость: Yamaha YJ
+• Материал: алюминий
+
+💡 Преимущества:
+• Увеличение мощности
+• Плавная работа на всех оборотах
+• Легкая настройка
+• Качественные материалы
+
+🚀 Идеален для тюнинга спортивных мотоциклов!', 4500, 'nibbi_pwk_34_yj.jpg')
+        """)
+        
+        conn.commit()
+        conn.close()
+        logging.info("✅ База данных инициализирована")
+        return True
+    except Exception as e:
+        logging.error(f"❌ Ошибка инициализации БД: {e}")
+        return False
+
+def get_categories():
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM categories ORDER BY id")
+        categories = cursor.fetchall()
+        conn.close()
+        return categories
+    except Exception as e:
+        logging.error(f"Ошибка получения категорий: {e}")
+        return []
+
+def get_products_by_category(category_id):
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, name, description, price, photo 
+            FROM products 
+            WHERE category_id = ? 
+            ORDER BY id
+        """, (category_id,))
+        products = cursor.fetchall()
+        conn.close()
+        return products
+    except Exception as e:
+        logging.error(f"Ошибка получения товаров: {e}")
+        return []
+
+def get_all_products():
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT p.id, p.name, p.description, p.price, p.photo, c.name 
+            FROM products p 
+            JOIN categories c ON p.category_id = c.id 
+            ORDER BY p.id
+        """)
+        products = cursor.fetchall()
+        conn.close()
+        return products
+    except Exception as e:
+        logging.error(f"Ошибка получения всех товаров: {e}")
+        return []
+
+def get_product_by_id(product_id):
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT p.id, p.name, p.description, p.price, p.photo, c.name 
+            FROM products p 
+            JOIN categories c ON p.category_id = c.id 
+            WHERE p.id = ?
+        """, (product_id,))
+        product = cursor.fetchone()
+        conn.close()
+        return product
+    except Exception as e:
+        logging.error(f"Ошибка получения товара: {e}")
+        return None
+
+def add_product_to_db(category_id, name, description, price, photo="No photo", published=False):
+    try:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO products (category_id, name, description, price, photo, published) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (category_id, name, description, price, photo, published))
+        product_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return product_id
+    except Exception as e:
+        logging.error(f"Ошибка добавления товара: {e}")
+        return None
+
+# === Web App ГЕНЕРАЦИЯ ===
+def generate_web_app_html():
+    """Генерирует HTML для Web App"""
+    products = get_all_products()
+    
+    html = """
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Мото запчасти | Магазин</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+            .container { max-width: 400px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 15px; margin-bottom: 20px; }
+            .header h1 { font-size: 24px; margin-bottom: 5px; }
+            .product-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .product-image { width: 100%; height: 200px; background: #f0f0f0; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; color: #666; }
+            .product-name { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+            .product-price { font-size: 20px; font-weight: bold; color: #667eea; margin-bottom: 10px; }
+            .product-description { font-size: 14px; color: #666; margin-bottom: 15px; line-height: 1.4; }
+            .buy-button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 20px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; }
+            .contact-info { background: white; border-radius: 15px; padding: 15px; margin-top: 20px; text-align: center; }
+            .contact-button { background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; text-decoration: none; display: block; }
+            .category-badge { background: #e9ecef; color: #495057; padding: 4px 8px; border-radius: 12px; font-size: 12px; margin-bottom: 8px; display: inline-block; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏍️ Мото запчасти</h1>
+                <p>Магазин тюнинга и карбюраторов</p>
+            </div>
+    """
+    
+    if products:
+        for product in products:
+            product_id, name, description, price, photo, category_name = product
+            clean_description = description.replace('*', '').replace('_', '').replace('`', '')
+            short_description = clean_description[:100] + '...' if len(clean_description) > 100 else clean_description
+            
+            html += f"""
+            <div class="product-card">
+                <div class="category-badge">{category_name}</div>
+                <div class="product-image">📷 Фото товара</div>
+                <div class="product-name">{name}</div>
+                <div class="product-price">{price}₽</div>
+                <div class="product-description">{short_description}</div>
+                <button class="buy-button" onclick="buyProduct({product_id}, '{name}', {price})">
+                    💳 Купить за {price}₽
+                </button>
+            </div>
+            """
+    else:
+        html += """
+            <div class="product-card" style="text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 20px;">😔</div>
+                <div style="font-size: 18px; color: #666; margin-bottom: 10px;">Товаров пока нет</div>
+            </div>
+        """
+    
+    html += """
+            <div class="contact-info">
+                <h3>📞 Контакты</h3>
+                <p>Телефон: +7 (918) 477-07-59</p>
+                <p>Telegram: @moto_zapchastibot</p>
+                <a href="https://t.me/moto_zapchastibot" class="contact-button">💬 Написать в Telegram</a>
+            </div>
+        </div>
+
+        <script>
+            function buyProduct(productId, productName, price) {
+                const message = `Хочу купить товар: ${productName}\\nЦена: ${price}₽\\n\\nПожалуйста, свяжитесь со мной для оформления заказа.`;
+                const telegramUrl = `https://t.me/moto_zapchastibot?text=${encodeURIComponent(message)}`;
+                window.open(telegramUrl, '_blank');
+            }
+
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.BackButton.show();
+                Telegram.WebApp.BackButton.onClick(function() {
+                    Telegram.WebApp.close();
+                });
+            }
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html
+
+def save_web_app_html():
+    """Сохраняет HTML для Web App в файл"""
+    html_content = generate_web_app_html()
+    web_app_path = os.path.join(current_dir, 'index.html')
+    
+    with open(web_app_path, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    logging.info("✅ Web App HTML сохранен")
+    return web_app_path
+
+# === КОМАНДЫ БОТА ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        web_app_button = InlineKeyboardButton(
+            "🛍️ Открыть магазин", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
+        keyboard = [
+            [web_app_button],
+            [InlineKeyboardButton("🛒 Каталог в боте", callback_data="catalog")],
+            [InlineKeyboardButton("📦 Под заказ", callback_data="pre_order")],
+            [InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)],
+            [InlineKeyboardButton("📞 Консультация", callback_data="consult")],
+            [InlineKeyboardButton("🚚 Доставка и оплата", callback_data="delivery")],
+            [InlineKeyboardButton("📱 Наш канал", url="https://t.me/moto_zapchasti_2025")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "🏍️ Добро пожаловать в *Мото запчасти* \\| *обзоры и магазин*\\!\n\n"
+            "🎯 *Новый интернет\\-магазин в Telegram\\!*\n\n"
+            "🛠️ Тюнинг и карбюраторы для мотоциклов\n"
+            "📦 Доставка по всей России\n"
+            "💳 Удобная оплата\n"
+            "🔧 Консультации по подбору\n\n"
+            "👉 *Нажмите \\\"🛍️ Открыть магазин\\\" для просмотра товаров в красивом интерфейсе\\!*",
+            reply_markup=reply_markup,
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в команде start: {e}")
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        
+        if data == "catalog":
+            await show_categories(query)
+        elif data == "pre_order":
+            await query.edit_message_text(
+                "📦 *Товары под заказ*\n\n"
+                "🔧 *Доступные категории под заказ:*\n"
+                "• Тюнинг\\-комплекты\n"
+                "• Карбюраторы и комплектующие\n"
+                "• Системы выхлопа\n"
+                "• Электронные блоки управления\n\n"
+                "⏱️ *Срок изготовления:* 1\\-2 месяца\n"
+                "💰 *Предоплата:* 30%\n\n"
+                "📞 *Для заказа напишите нам в Telegram:* @moto\\_zapchastibot",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
+                parse_mode='MarkdownV2'
+            )
+        elif data == "consult":
+            await query.edit_message_text(
+                "📞 *Консультация и заказ:*\n\n"
+                "📱 *Телефон:* \\+7 \\(918\\) 477\\-07\\-59\n"
+                "🤖 *Telegram:* @moto\\_zapchastibot\n"
+                "🛒 *Avito:* VALERIYA market\n"
+                "⏰ *Время работы:* 9:00\\-21:00\n\n"
+                "Мы поможем с подбором запчастей\\!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
+                parse_mode='MarkdownV2'
+            )
+        elif data == "delivery":
+            await query.edit_message_text(
+                "🚚 *Доставка и оплата:*\n\n"
+                "• *По России:* 3\\-14 дней\n"
+                "• *ТК:* СДЭК, Почта России\n"
+                "• *Оплата:* карта/наличные/онлайн\n"
+                "• *Гарантия:* 30 дней\n"
+                "• *Самовывоз:* Новороссийск\n\n"
+                "📦 *Товары под заказ:*\n"
+                "• Срок: 1\\-2 месяца\n"
+                "• Предоплата: 30%\n\n"
+                "💳 *Онлайн оплата:*\n"
+                "• Банковской картой\n"
+                "• Переводом по номеру телефона\n"
+                "• Через СБП\n\n"
+                "📞 Уточнить детали: \\+7 \\(918\\) 477\\-07\\-59",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
+                parse_mode='MarkdownV2'
+            )
+        elif data == "back_to_categories":
+            await show_categories(query)
+        elif data.startswith("category_"):
+            category_id = int(data.split("_")[1])
+            await show_products(query, category_id)
+        elif data == "back_to_start":
+            await show_main_menu(query)
+    except Exception as e:
+        logging.error(f"Ошибка в обработке callback: {e}")
+
+async def show_main_menu(query):
+    try:
+        web_app_button = InlineKeyboardButton(
+            "🛍️ Открыть магазин", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
+        keyboard = [
+            [web_app_button],
+            [InlineKeyboardButton("🛒 Каталог в боте", callback_data="catalog")],
+            [InlineKeyboardButton("📦 Под заказ", callback_data="pre_order")],
+            [InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)],
+            [InlineKeyboardButton("📞 Консультация", callback_data="consult")],
+            [InlineKeyboardButton("🚚 Доставка и оплата", callback_data="delivery")],
+            [InlineKeyboardButton("📱 Наш канал", url="https://t.me/moto_zapchasti_2025")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "🏍️ Добро пожаловать в мото\\-магазин\\!\n\n"
+            "🎯 *Новый интернет\\-магазин в Telegram\\!*\n\n"
+            "👉 *Нажмите \\\"🛍️ Открыть магазин\\\" для просмотра товаров в красивом интерфейсе\\!*",
+            reply_markup=reply_markup,
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в show_main_menu: {e}")
+
+async def show_categories(query):
+    try:
+        categories = get_categories()
+        
+        keyboard = []
+        for cat_id, cat_name in categories:
+            keyboard.append([InlineKeyboardButton(cat_name, callback_data=f"category_{cat_id}")])
+        
+        keyboard.append([InlineKeyboardButton("📦 Товары под заказ", callback_data="pre_order")])
+        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")])
+        
+        await query.edit_message_text(
+            "🏍️ *Выберите категорию:*\n\n"
+            "• 🏍️ Тюнинг \\- тюнинг\\-комплекты, доработки\n"
+            "• 🛠️ Карбюраторы \\- карбюраторы и комплектующие",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в show_categories: {e}")
+
+async def show_products(query, category_id):
+    try:
+        products = get_products_by_category(category_id)
+        
+        if not products:
+            keyboard = [
+                [InlineKeyboardButton("📦 Заказать этот товар", callback_data="pre_order")],
+                [InlineKeyboardButton("🔙 Назад к категориям", callback_data="back_to_categories")]
+            ]
+            await query.edit_message_text(
+                "😔 В этой категории пока нет товаров в наличии\\.\n\n"
+                "📦 *Но вы можете заказать этот товар\\!*\n"
+                "⏱️ Срок изготовления: 1\\-2 месяца\n"
+                "💰 Предоплата: 30%\n\n"
+                "📞 Для заказа: \\+7 \\(918\\) 477\\-07\\-59",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='MarkdownV2'
+            )
+            return
+        
+        categories = get_categories()
+        category_name = next((name for id, name in categories if id == category_id), "Категория")
+        
+        text = f"📦 *{category_name} \\- Товары в наличии:*\n\n"
+        
+        keyboard = []
+        for product_id, name, description, price, photo in products:
+            keyboard.append([InlineKeyboardButton(f"{name} - {price}₽", callback_data=f"product_{product_id}")])
+        
+        keyboard.append([InlineKeyboardButton("📦 Заказать другой товар", callback_data="pre_order")])
+        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
+        keyboard.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data="back_to_categories")])
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в show_products: {e}")
+
+async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Прямой доступ к каталогу через команду"""
+    await show_categories_direct(update)
+
+async def show_categories_direct(update: Update):
+    """Показ категорий напрямую из команды"""
+    try:
+        web_app_button = InlineKeyboardButton(
+            "🛍️ Открыть магазин", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
+        categories = get_categories()
+        
+        keyboard = []
+        for cat_id, cat_name in categories:
+            keyboard.append([InlineKeyboardButton(cat_name, callback_data=f"category_{cat_id}")])
+        
+        keyboard.append([web_app_button])
+        keyboard.append([InlineKeyboardButton("📦 Товары под заказ", callback_data="pre_order")])
+        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
+        keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_start")])
+        
+        await update.message.reply_text(
+            "🏍️ *Выберите категорию:*\n\n"
+            "• 🏍️ Тюнинг \\- тюнинг\\-комплекты, доработки\n"
+            "• 🛠️ Карбюраторы \\- карбюраторы и комплектующие\n\n"
+            "🎯 *Или откройте красивый магазин через Web App\\!*",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в show_categories_direct: {e}")
+
+async def web_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для быстрого доступа к Web App"""
+    try:
+        web_app_button = InlineKeyboardButton(
+            "🛍️ Открыть магазин", 
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+        
+        reply_markup = InlineKeyboardMarkup([[web_app_button]])
+        
+        await update.message.reply_text(
+            "🎯 *Откройте наш интернет\\-магазин в Telegram\\!*\n\n"
+            "В магазине вы найдете:\n"
+            "• 📷 Фото товаров\n"
+            "• 💰 Цены\n"
+            "• 📝 Описания\n"
+            "• 💳 Удобное оформление заказа\n\n"
+            "Нажмите кнопку ниже чтобы открыть магазин 👇",
+            reply_markup=reply_markup,
+            parse_mode='MarkdownV2'
+        )
+    except Exception as e:
+        logging.error(f"Ошибка в web_app_command: {e}")
+
+async def add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавление товара с AI-генерацией"""
+    try:
+        user_id = update.effective_user.id
+        
+        if user_id != ADMIN_ID:
+            await update.message.reply_text("❌ У вас нет прав для этой команды")
+            return
+        
+        if not context.args or len(context.args) < 3:
+            await update.message.reply_text(
+                "📝 *Использование:*\n"
+                "`/addproduct <категория_id> <название> <цена>`\n\n"
+                "*Пример:*\n"
+                "`/addproduct 2 \"Карбюратор Nibbi PWK 34 YJ\" 4500`\n\n"
+                "*Категории:*\n"
+                "1 \\- 🏍️ Тюнинг\n"
+                "2 \\- 🛠️ Карбюраторы",
+                parse_mode='MarkdownV2'
+            )
+            return
+        
+        category_id = int(context.args[0])
+        product_name = " ".join(context.args[1:-1])
+        price = int(context.args[-1])
+        
+        if category_id < 1 or category_id > 2:
+            await update.message.reply_text("❌ Неверный ID категории. Допустимые значения: 1-2")
+            return
+        
+        wait_msg = await update.message.reply_text("🤖 Генерируем описание через AI...")
+        
+        categories = get_categories()
+        category_name = next((name for id, name in categories if id == category_id), "мото запчасти")
+        
+        generator = YandexGPTGenerator(YANDEX_API_KEY, YANDEX_FOLDER_ID)
+        description = generator.generate_product_description(product_name, category_name)
+        
+        product_id = add_product_to_db(category_id, product_name, description, price)
+        
+        await wait_msg.delete()
+        
+        if product_id:
+            save_web_app_html()
+            
+            await update.message.reply_text(
+                f"✅ *Товар добавлен\\!*\n\n"
+                f"🏷️ Название: {product_name}\n"
+                f"📁 Категория: {category_name}\n"
+                f"💰 Цена: {price}₽\n"
+                f"📋 ID товара: {product_id}",
+                parse_mode='MarkdownV2'
+            )
+        else:
+            await update.message.reply_text("❌ Ошибка при добавлении товара в базу")
+            
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат цены или ID категории")
+    except Exception as e:
+        logging.error(f"Ошибка в add_product: {e}")
+        await update.message.reply_text("❌ Произошла ошибка при добавлении товара")
+
+def main():
+    try:
+        print("🔄 Инициализация базы данных...")
+        if not init_db():
+            print("❌ Не удалось инициализировать базу данных")
+            return
+        
+        print("🔄 Создание Web App HTML...")
+        save_web_app_html()
+        
+        print("🔄 Создание приложения...")
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("webapp", web_app_command))
+        application.add_handler(CommandHandler("catalog", catalog_command))
+        application.add_handler(CommandHandler("addproduct", add_product))
+        application.add_handler(CallbackQueryHandler(handle_callback))
+        
+        print("🟢 Мото-бот с Web App запущен!")
+        print("🤖 Бот готов к работе. Напишите /start в Telegram")
+        print("🛍️ Web App создан: index.html")
+        print("\n⚠️ ДАЛЕЕ: Загрузите файлы в GitHub репозиторий и настройте GitHub Pages")
+        
+        application.run_polling()
+        
+    except Exception as e:
+        print(f"🔴 Критическая ошибка при запуске: {e}")
+
+if __name__ == "__main__":
+    main()
