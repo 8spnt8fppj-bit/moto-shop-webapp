@@ -36,95 +36,95 @@ logging.basicConfig(
 current_dir = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(current_dir, 'moto_shop.db')
 
-# === YANDEX GPT ГЕНЕРАТОР ===
-class YandexGPTGenerator:
-    def __init__(self, api_key, folder_id):
-        self.api_key = api_key
-        self.folder_id = folder_id
-        self.url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-    
-    def generate_product_description(self, product_name, category):
-        headers = {
-            "Authorization": f"Api-Key {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        prompt = f"""
-        Создай продающее описание для товара "{product_name}" в категории "{category}".
-
-        Формат:
-        🏍️ [Заголовок с эмодзи]
-        
-        [Краткое описание преимуществ]
-        
-        🔧 Характеристики:
-        • [характеристика 1]
-        • [характеристика 2] 
-        • [характеристика 3]
-        
-        💡 Преимущества:
-        • [преимущество 1]
-        • [преимущество 2]
-        
-        🚀 [Призыв к действию]
-        
-        Используй эмодзи, будь дружелюбным и профессиональным.
-        """
-        
-        data = {
-            "modelUri": f"gpt://{self.folder_id}/yandexgpt/latest",
-            "completionOptions": {
-                "stream": False,
-                "temperature": 0.7,
-                "maxTokens": 1000
-            },
-            "messages": [
-                {
-                    "role": "system", 
-                    "text": "Ты эксперт по мото-запчастям. Создавай качественные описания товаров для Telegram канала."
-                },
-                {
-                    "role": "user",
-                    "text": prompt
-                }
-            ]
-        }
-        
-        try:
-            response = requests.post(self.url, headers=headers, json=data, timeout=30)
-            if response.status_code == 200:
-                result = response.json()
-                return result['result']['alternatives'][0]['message']['text']
-            else:
-                logging.error(f"Yandex API error: {response.status_code}")
-                return self.get_fallback_description(product_name, category)
-        except Exception as e:
-            logging.error(f"Yandex API connection error: {str(e)}")
-            return self.get_fallback_description(product_name, category)
-    
-    def get_fallback_description(self, product_name, category):
-        return f"""🏍️ {product_name}
-
-Качественная запчасть для вашего мотоцикла в категории {category}.
-
-🔧 Характеристики:
-• Высокое качество материалов
-• Совместимость с большинством моделей
-• Простота установки
-
-💡 Преимущества:
-• Надежность и долговечность
-• Отличное соотношение цены и качества
-• Гарантия производителя
-
-🚀 Закажите сейчас и улучшите свой мотоцикл!"""
+# === ТОВАРЫ ===
+PRODUCTS = [
+    {
+        'id': 1,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 34 YJ',
+        'description': 'Карбюратор Nibbi PWK 34 YJ - для тюнинга 350-400cc!\n\nДвигатель не раскрывает весь потенциал? PWK 34 YJ - это плоскодроссельный карбюратор для серьезного тюнинга моторов 350-400cc.\n\nЧто вы получите:\n✅ Мгновенный отклик\n✅ Мощный подхват\n✅ Точная настройка\n\n💬 Внимание! Для раскрытия всего потенциала потребуется точная настройка.',
+        'price': 7800
+    },
+    {
+        'id': 2,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 36 YJ',
+        'description': 'Карбюратор Nibbi PWK 36 YJ - макс. производительность!\n\nДля максимальных мощностей и гоночных режимов!',
+        'price': 7000
+    },
+    {
+        'id': 3,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PE 30',
+        'description': 'Мощность без сложностей! PE 30 - это современная надежная замена штатных карбюраторов.',
+        'price': 7000
+    },
+    {
+        'id': 4,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 32 YJ',
+        'description': 'Мощный апгрейд для вашего проекта! PWK 32 - выбор для моторов 250-350cc.',
+        'price': 7000
+    },
+    {
+        'id': 5,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PE 22',
+        'description': 'Надежная замена штатного карбюратора! PE 22 - это стабильная работа и легкий запуск.',
+        'price': 7000
+    },
+    {
+        'id': 6,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 24',
+        'description': 'Мощность и контроль для 125-150cc! Компактный, но эффективный PWK 24.',
+        'price': 7000
+    },
+    {
+        'id': 7,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 26',
+        'description': 'Золотая середина для тюнинга 150-200cc! PWK 26 сочетает мощь и управляемость.',
+        'price': 7000
+    },
+    {
+        'id': 8,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PE 26',
+        'description': 'Идеальный апгрейд штатного карбюратора! PE 26 решает проблемы с запуском.',
+        'price': 7000
+    },
+    {
+        'id': 9,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PE 28',
+        'description': 'Проверенное решение для моторов 200-250cc! Стабильная работа в любых условиях.',
+        'price': 7000
+    },
+    {
+        'id': 10,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 28 YJ',
+        'description': 'Мгновенный отклик и агрессивный подхват! Золотая середина для тюнинга.',
+        'price': 7000
+    },
+    {
+        'id': 11,
+        'category_id': 2,
+        'name': 'Карбюратор Nibbi PWK 38',
+        'description': 'Для серьезных проектов! PWK 38 - выбор для сильно доработанных моторов.',
+        'price': 7000
+    }
+]
 
 # === БАЗА ДАННЫХ ===
 def init_db():
+    """Инициализация базы данных"""
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
         
+        # Таблица категорий
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY,
@@ -132,6 +132,7 @@ def init_db():
             )
         ''')
         
+        # Таблица товаров
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,7 +146,26 @@ def init_db():
             )
         ''')
         
-        # Только две категории: Тюнинг и Карбюраторы
+        # Таблица заказов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                user_name TEXT,
+                product_id INTEGER,
+                product_name TEXT,
+                price INTEGER,
+                customer_name TEXT,
+                customer_phone TEXT,
+                customer_address TEXT,
+                delivery_method TEXT,
+                status TEXT DEFAULT 'new',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products (id)
+            )
+        ''')
+        
+        # Категории
         categories = [
             (1, '🏍️ Тюнинг'),
             (2, '🛠️ Карбюраторы')
@@ -154,30 +174,16 @@ def init_db():
         # Очищаем старые категории и добавляем новые
         cursor.execute("DELETE FROM categories")
         for cat_id, cat_name in categories:
-            cursor.execute("INSERT INTO categories (id, name) VALUES (?, ?)", (cat_id, cat_name))
+            cursor.execute("INSERT OR IGNORE INTO categories (id, name) VALUES (?, ?)", (cat_id, cat_name))
         
-        # Добавляем тестовый товар - карбюратор Nibbi PWK 34 YJ
-        cursor.execute("""
-            INSERT OR IGNORE INTO products (id, category_id, name, description, price, photo) 
-            VALUES (1, 2, 'Карбюратор Nibbi PWK 34 YJ', 
-            '🏍️ Карбюратор Nibbi PWK 34 YJ
-
-Высокопроизводительный карбюратор для спортивных мотоциклов.
-
-🔧 Характеристики:
-• Диаметр: 34мм
-• Тип: PWK
-• Совместимость: Yamaha YJ
-• Материал: алюминий
-
-💡 Преимущества:
-• Увеличение мощности
-• Плавная работа на всех оборотах
-• Легкая настройка
-• Качественные материалы
-
-🚀 Идеален для тюнинга спортивных мотоциклов!', 4500, 'nibbi_pwk_34_yj.jpg')
-        """)
+        # Очищаем старые товары и добавляем новые
+        cursor.execute("DELETE FROM products")
+        for product in PRODUCTS:
+            cursor.execute("""
+                INSERT INTO products (id, category_id, name, description, price, photo) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (product['id'], product['category_id'], product['name'], 
+                  product['description'], product['price'], 'nibbi.jpg'))
         
         conn.commit()
         conn.close()
@@ -188,6 +194,7 @@ def init_db():
         return False
 
 def get_categories():
+    """Получает список категорий"""
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
@@ -200,6 +207,7 @@ def get_categories():
         return []
 
 def get_products_by_category(category_id):
+    """Получает товары по категории"""
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
@@ -216,24 +224,8 @@ def get_products_by_category(category_id):
         logging.error(f"Ошибка получения товаров: {e}")
         return []
 
-def get_all_products():
-    try:
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT p.id, p.name, p.description, p.price, p.photo, c.name 
-            FROM products p 
-            JOIN categories c ON p.category_id = c.id 
-            ORDER BY p.id
-        """)
-        products = cursor.fetchall()
-        conn.close()
-        return products
-    except Exception as e:
-        logging.error(f"Ошибка получения всех товаров: {e}")
-        return []
-
 def get_product_by_id(product_id):
+    """Получает товар по ID"""
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
@@ -250,26 +242,33 @@ def get_product_by_id(product_id):
         logging.error(f"Ошибка получения товара: {e}")
         return None
 
-def add_product_to_db(category_id, name, description, price, photo="No photo", published=False):
+def create_order(user_id, user_name, product_id, product_name, price, customer_name, customer_phone, customer_address, delivery_method):
+    """Создает новый заказ"""
     try:
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO products (category_id, name, description, price, photo, published) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (category_id, name, description, price, photo, published))
-        product_id = cursor.lastrowid
+        
+        cursor.execute('''
+            INSERT INTO orders (user_id, user_name, product_id, product_name, price, customer_name, customer_phone, customer_address, delivery_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, user_name, product_id, product_name, price, customer_name, customer_phone, customer_address, delivery_method))
+        
+        order_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return product_id
+        
+        logging.info(f"✅ Заказ создан: ID {order_id} для пользователя {user_id}")
+        return order_id
     except Exception as e:
-        logging.error(f"Ошибка добавления товара: {e}")
+        logging.error(f"❌ Ошибка создания заказа: {e}")
         return None
 
 # === Web App ГЕНЕРАЦИЯ ===
 def generate_web_app_html():
     """Генерирует HTML для Web App"""
-    products = get_all_products()
+    products = []
+    for category_id in [1, 2]:
+        products.extend(get_products_by_category(category_id))
     
     html = """
     <!DOCTYPE html>
@@ -280,19 +279,93 @@ def generate_web_app_html():
         <title>Мото запчасти | Магазин</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-            .container { max-width: 400px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 15px; margin-bottom: 20px; }
-            .header h1 { font-size: 24px; margin-bottom: 5px; }
-            .product-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .product-image { width: 100%; height: 200px; background: #f0f0f0; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; color: #666; }
-            .product-name { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-            .product-price { font-size: 20px; font-weight: bold; color: #667eea; margin-bottom: 10px; }
-            .product-description { font-size: 14px; color: #666; margin-bottom: 15px; line-height: 1.4; }
-            .buy-button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 20px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; }
-            .contact-info { background: white; border-radius: 15px; padding: 15px; margin-top: 20px; text-align: center; }
-            .contact-button { background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; text-decoration: none; display: block; }
-            .category-badge { background: #e9ecef; color: #495057; padding: 4px 8px; border-radius: 12px; font-size: 12px; margin-bottom: 8px; display: inline-block; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                background: #f5f5f5; 
+                color: #333;
+            }
+            .container { 
+                max-width: 400px; 
+                margin: 0 auto; 
+                padding: 20px; 
+            }
+            .header { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; 
+                padding: 20px; 
+                text-align: center; 
+                border-radius: 15px; 
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
+            .product-card { 
+                background: white; 
+                border-radius: 15px; 
+                padding: 15px; 
+                margin-bottom: 15px; 
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .product-image { 
+                width: 100%; 
+                height: 200px; 
+                background: #f0f0f0; 
+                border-radius: 10px; 
+                margin-bottom: 10px; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                color: #666;
+            }
+            .product-name { 
+                font-size: 18px; 
+                font-weight: bold; 
+                margin-bottom: 5px; 
+            }
+            .product-price { 
+                font-size: 20px; 
+                font-weight: bold; 
+                color: #667eea; 
+                margin-bottom: 10px; 
+            }
+            .product-description { 
+                font-size: 14px; 
+                color: #666; 
+                margin-bottom: 15px; 
+                line-height: 1.4; 
+            }
+            .buy-button { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; 
+                border: none; 
+                padding: 12px 20px; 
+                border-radius: 25px; 
+                font-size: 16px; 
+                font-weight: bold; 
+                cursor: pointer; 
+                width: 100%;
+            }
+            .contact-info { 
+                background: white; 
+                border-radius: 15px; 
+                padding: 15px; 
+                margin-top: 20px; 
+                text-align: center;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .contact-button { 
+                background: #28a745; 
+                color: white; 
+                border: none; 
+                padding: 12px 20px; 
+                border-radius: 25px; 
+                font-size: 16px; 
+                font-weight: bold; 
+                cursor: pointer; 
+                width: 100%; 
+                margin-top: 10px; 
+                text-decoration: none; 
+                display: block; 
+            }
         </style>
     </head>
     <body>
@@ -305,18 +378,17 @@ def generate_web_app_html():
     
     if products:
         for product in products:
-            product_id, name, description, price, photo, category_name = product
+            product_id, name, description, price, photo = product
             clean_description = description.replace('*', '').replace('_', '').replace('`', '')
             short_description = clean_description[:100] + '...' if len(clean_description) > 100 else clean_description
             
             html += f"""
             <div class="product-card">
-                <div class="category-badge">{category_name}</div>
-                <div class="product-image">📷 Фото товара</div>
+                <div class="product-image">🏍️ Карбюратор</div>
                 <div class="product-name">{name}</div>
                 <div class="product-price">{price}₽</div>
                 <div class="product-description">{short_description}</div>
-                <button class="buy-button" onclick="buyProduct({product_id}, '{name}', {price})">
+                <button class="buy-button" onclick="buyProduct('{name}', {price})">
                     💳 Купить за {price}₽
                 </button>
             </div>
@@ -334,18 +406,38 @@ def generate_web_app_html():
                 <h3>📞 Контакты</h3>
                 <p>Телефон: +7 (918) 477-07-59</p>
                 <p>Telegram: @moto_zapchastibot</p>
-                <a href="https://t.me/moto_zapchastibot" class="contact-button">💬 Написать в Telegram</a>
+                <button class="contact-button" onclick="contactTelegram()">
+                    💬 Написать в Telegram
+                </button>
             </div>
         </div>
 
         <script>
-            function buyProduct(productId, productName, price) {
-                const message = `Хочу купить товар: ${productName}\\nЦена: ${price}₽\\n\\nПожалуйста, свяжитесь со мной для оформления заказа.`;
-                const telegramUrl = `https://t.me/moto_zapchastibot?text=${encodeURIComponent(message)}`;
-                window.open(telegramUrl, '_blank');
+            function buyProduct(productName, price) {
+                const message = `Заказ из Web-App: ${productName} - ${price}₽`;
+                if (window.Telegram && Telegram.WebApp) {
+                    Telegram.WebApp.sendData(JSON.stringify({
+                        action: 'order',
+                        product: productName,
+                        price: price
+                    }));
+                } else {
+                    const telegramUrl = `https://t.me/moto_zapchastibot?start=webapp_order&text=${encodeURIComponent(message)}`;
+                    window.open(telegramUrl, '_blank');
+                }
+            }
+
+            function contactTelegram() {
+                const telegramUrl = 'https://t.me/moto_zapchastibot';
+                if (window.Telegram && Telegram.WebApp) {
+                    Telegram.WebApp.openTelegramLink(telegramUrl);
+                } else {
+                    window.open(telegramUrl, '_blank');
+                }
             }
 
             if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.expand();
                 Telegram.WebApp.BackButton.show();
                 Telegram.WebApp.BackButton.onClick(function() {
                     Telegram.WebApp.close();
@@ -360,18 +452,192 @@ def generate_web_app_html():
 
 def save_web_app_html():
     """Сохраняет HTML для Web App в файл"""
-    html_content = generate_web_app_html()
-    web_app_path = os.path.join(current_dir, 'index.html')
-    
-    with open(web_app_path, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    
-    logging.info("✅ Web App HTML сохранен")
-    return web_app_path
-
-# === КОМАНДЫ БОТА ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        html_content = generate_web_app_html()
+        web_app_path = os.path.join(current_dir, 'index.html')
+        
+        with open(web_app_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        logging.info("✅ Web App HTML сохранен")
+        return True
+    except Exception as e:
+        logging.error(f"❌ Ошибка сохранения Web App: {e}")
+        return False
+
+# === СИСТЕМА ЗАКАЗОВ ===
+async def start_order_flow(update: Update, context: ContextTypes.DEFAULT_TYPE, product_id=None):
+    """Начинает процесс оформления заказа"""
+    try:
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        if product_id is None:
+            product_id = context.user_data.get('order_product_id')
+        
+        product = get_product_by_id(product_id)
+        if not product:
+            await query.answer("❌ Товар не найден", show_alert=True)
+            return
+        
+        product_id, name, description, price, photo, category_name = product
+        
+        # Сохраняем информацию о товаре
+        context.user_data['order_product_id'] = product_id
+        context.user_data['order_price'] = price
+        context.user_data['order_product_name'] = name
+        context.user_data['waiting_for_name'] = True
+        
+        await query.edit_message_text(
+            f"🛒 *Оформление заказа*\n\n"
+            f"🏷️ *Товар:* {name}\n"
+            f"💰 *Цена:* {price}₽\n\n"
+            f"📝 *Заполните данные:*\n\n"
+            f"Пожалуйста, отправьте ваше *ФИО*:",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"product_{product_id}")]
+            ])
+        )
+        
+    except Exception as e:
+        logging.error(f"Ошибка в start_order_flow: {e}")
+        await update.callback_query.answer("❌ Ошибка при оформлении заказа", show_alert=True)
+
+async def handle_name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод ФИО"""
+    try:
+        if not context.user_data.get('waiting_for_name'):
+            return
+        
+        customer_name = update.message.text
+        context.user_data['customer_name'] = customer_name
+        context.user_data['waiting_for_name'] = False
+        context.user_data['waiting_for_phone'] = True
+        
+        await update.message.reply_text(
+            f"✅ *ФИО получено:* {customer_name}\n\n"
+            f"Теперь отправьте ваш *номер телефона*:",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"Ошибка в handle_name_input: {e}")
+
+async def handle_phone_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод телефона"""
+    try:
+        if not context.user_data.get('waiting_for_phone'):
+            return
+        
+        customer_phone = update.message.text
+        context.user_data['customer_phone'] = customer_phone
+        context.user_data['waiting_for_phone'] = False
+        context.user_data['waiting_for_address'] = True
+        
+        await update.message.reply_text(
+            f"✅ *Телефон получен:* {customer_phone}\n\n"
+            f"Теперь отправьте *адрес доставки*:",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"Ошибка в handle_phone_input: {e}")
+
+async def handle_address_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ввод адреса"""
+    try:
+        if not context.user_data.get('waiting_for_address'):
+            return
+        
+        customer_address = update.message.text
+        context.user_data['customer_address'] = customer_address
+        context.user_data['waiting_for_address'] = False
+        
+        # Создаем заказ сразу после получения адреса
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+        product_id = context.user_data.get('order_product_id')
+        product_name = context.user_data.get('order_product_name')
+        price = context.user_data.get('order_price')
+        customer_name = context.user_data.get('customer_name')
+        customer_phone = context.user_data.get('customer_phone')
+        
+        # Создаем заказ в базе
+        order_id = create_order(
+            user_id=user_id,
+            user_name=user_name,
+            product_id=product_id,
+            product_name=product_name,
+            price=price,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            customer_address=customer_address,
+            delivery_method="уточнить"
+        )
+        
+        if order_id:
+            # Отправляем уведомление администратору
+            order_message = (
+                f"🛒 *НОВЫЙ ЗАКАЗ!* №{order_id}\n\n"
+                f"🏷️ *Товар:* {product_name}\n"
+                f"💰 *Цена:* {price}₽\n"
+                f"👤 *ФИО:* {customer_name}\n"
+                f"📞 *Телефон:* {customer_phone}\n"
+                f"🏠 *Адрес:* {customer_address}\n\n"
+                f"👤 *Покупатель:* {user_name}\n"
+                f"🆔 *ID:* {user_id}"
+            )
+            
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=order_message,
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logging.error(f"Ошибка отправки админу: {e}")
+            
+            # Сообщение пользователю
+            await update.message.reply_text(
+                f"🎉 *Заказ оформлен!* №{order_id}\n\n"
+                f"✅ Спасибо за заказ!\n\n"
+                f"📞 *Для связи:* +7 (918) 477-07-59\n"
+                f"⏰ *Время обработки:* 1-2 часа\n\n"
+                f"Мы свяжемся с вами для подтверждения заказа в ближайшее время.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Произошла ошибка при создании заказа. Пожалуйста, свяжитесь с нами: +7 (918) 477-07-59",
+                parse_mode='Markdown'
+            )
+        
+        # Очищаем данные заказа
+        context.user_data.clear()
+        
+    except Exception as e:
+        logging.error(f"Ошибка в handle_address_input: {e}")
+        await update.message.reply_text("❌ Ошибка при обработке данных")
+
+# === ОСНОВНЫЕ КОМАНДЫ БОТА ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда старт"""
+    try:
+        # Проверяем аргументы для переходов из Web App
+        if context.args and len(context.args) > 0:
+            start_arg = context.args[0]
+            if start_arg == 'webapp_order':
+                await update.message.reply_text(
+                    "🛒 *Заказ из Web-App*\n\n"
+                    "Для оформления заказа выберите товар в каталоге бота:",
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🛒 Открыть каталог", callback_data="catalog")]
+                    ])
+                )
+                return
+        
         web_app_button = InlineKeyboardButton(
             "🛍️ Открыть магазин", 
             web_app=WebAppInfo(url=WEB_APP_URL)
@@ -379,31 +645,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         keyboard = [
             [web_app_button],
-            [InlineKeyboardButton("🛒 Каталог в боте", callback_data="catalog")],
+            [InlineKeyboardButton("🛒 Каталог", callback_data="catalog")],
             [InlineKeyboardButton("📦 Под заказ", callback_data="pre_order")],
-            [InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)],
-            [InlineKeyboardButton("📞 Консультация", callback_data="consult")],
-            [InlineKeyboardButton("🚚 Доставка и оплата", callback_data="delivery")],
-            [InlineKeyboardButton("📱 Наш канал", url="https://t.me/moto_zapchasti_2025")]
+            [InlineKeyboardButton("📞 Контакты", callback_data="contacts")]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "🏍️ Добро пожаловать в *Мото запчасти* \\| *обзоры и магазин*\\!\n\n"
-            "🎯 *Новый интернет\\-магазин в Telegram\\!*\n\n"
+            "🏍️ Добро пожаловать в магазин мото запчастей!\n\n"
             "🛠️ Тюнинг и карбюраторы для мотоциклов\n"
-            "📦 Доставка по всей России\n"
-            "💳 Удобная оплата\n"
-            "🔧 Консультации по подбору\n\n"
-            "👉 *Нажмите \\\"🛍️ Открыть магазин\\\" для просмотра товаров в красивом интерфейсе\\!*",
-            reply_markup=reply_markup,
-            parse_mode='MarkdownV2'
+            "📦 Доставка по всей России\n\n"
+            "👉 Нажмите '🛍️ Открыть магазин' для просмотра товаров!",
+            reply_markup=reply_markup
         )
     except Exception as e:
         logging.error(f"Ошибка в команде start: {e}")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик callback-ов"""
     try:
         query = update.callback_query
         await query.answer()
@@ -415,58 +675,49 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "pre_order":
             await query.edit_message_text(
                 "📦 *Товары под заказ*\n\n"
-                "🔧 *Доступные категории под заказ:*\n"
-                "• Тюнинг\\-комплекты\n"
-                "• Карбюраторы и комплектующие\n"
-                "• Системы выхлопа\n"
-                "• Электронные блоки управления\n\n"
-                "⏱️ *Срок изготовления:* 1\\-2 месяца\n"
-                "💰 *Предоплата:* 30%\n\n"
-                "📞 *Для заказа напишите нам в Telegram:* @moto\\_zapchastibot",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
-                parse_mode='MarkdownV2'
+                "🔧 Мы можем найти и привезти под заказ:\n"
+                "• Карбюраторы различных моделей\n" 
+                "• Тюнинг-комплекты\n"
+                "• И многое другое!\n\n"
+                "⏱️ Срок изготовления: 1-2 месяца\n"
+                "💰 Предоплата: 30%\n\n"
+                "📞 Для заказа: +7 (918) 477-07-59",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]])
             )
-        elif data == "consult":
+        elif data == "contacts":
             await query.edit_message_text(
-                "📞 *Консультация и заказ:*\n\n"
-                "📱 *Телефон:* \\+7 \\(918\\) 477\\-07\\-59\n"
-                "🤖 *Telegram:* @moto\\_zapchastibot\n"
-                "🛒 *Avito:* VALERIYA market\n"
-                "⏰ *Время работы:* 9:00\\-21:00\n\n"
-                "Мы поможем с подбором запчастей\\!",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
-                parse_mode='MarkdownV2'
+                "📞 *Контакты*\n\n"
+                "📱 Телефон: +7 (918) 477-07-59\n"
+                "🤖 Telegram: @moto_zapchastibot\n"
+                "⏰ Время работы: 9:00-21:00",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]])
             )
-        elif data == "delivery":
-            await query.edit_message_text(
-                "🚚 *Доставка и оплата:*\n\n"
-                "• *По России:* 3\\-14 дней\n"
-                "• *ТК:* СДЭК, Почта России\n"
-                "• *Оплата:* карта/наличные/онлайн\n"
-                "• *Гарантия:* 30 дней\n"
-                "• *Самовывоз:* Новороссийск\n\n"
-                "📦 *Товары под заказ:*\n"
-                "• Срок: 1\\-2 месяца\n"
-                "• Предоплата: 30%\n\n"
-                "💳 *Онлайн оплата:*\n"
-                "• Банковской картой\n"
-                "• Переводом по номеру телефона\n"
-                "• Через СБП\n\n"
-                "📞 Уточнить детали: \\+7 \\(918\\) 477\\-07\\-59",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")]]),
-                parse_mode='MarkdownV2'
-            )
+        elif data == "back_to_start":
+            await show_main_menu(query)
         elif data == "back_to_categories":
             await show_categories(query)
         elif data.startswith("category_"):
             category_id = int(data.split("_")[1])
             await show_products(query, category_id)
-        elif data == "back_to_start":
-            await show_main_menu(query)
+        elif data.startswith("product_"):
+            product_id = int(data.split("_")[1])
+            await show_product(query, product_id)
+        elif data.startswith("buy_"):
+            product_id = int(data.split("_")[1])
+            await start_order_flow(update, context, product_id)
+        elif data == "cancel_order":
+            context.user_data.clear()
+            await query.edit_message_text(
+                "❌ Заказ отменен.",
+                parse_mode='Markdown'
+            )
+                
     except Exception as e:
         logging.error(f"Ошибка в обработке callback: {e}")
 
 async def show_main_menu(query):
+    """Показывает главное меню"""
     try:
         web_app_button = InlineKeyboardButton(
             "🛍️ Открыть магазин", 
@@ -475,27 +726,22 @@ async def show_main_menu(query):
         
         keyboard = [
             [web_app_button],
-            [InlineKeyboardButton("🛒 Каталог в боте", callback_data="catalog")],
+            [InlineKeyboardButton("🛒 Каталог", callback_data="catalog")],
             [InlineKeyboardButton("📦 Под заказ", callback_data="pre_order")],
-            [InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)],
-            [InlineKeyboardButton("📞 Консультация", callback_data="consult")],
-            [InlineKeyboardButton("🚚 Доставка и оплата", callback_data="delivery")],
-            [InlineKeyboardButton("📱 Наш канал", url="https://t.me/moto_zapchasti_2025")]
+            [InlineKeyboardButton("📞 Контакты", callback_data="contacts")]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            "🏍️ Добро пожаловать в мото\\-магазин\\!\n\n"
-            "🎯 *Новый интернет\\-магазин в Telegram\\!*\n\n"
-            "👉 *Нажмите \\\"🛍️ Открыть магазин\\\" для просмотра товаров в красивом интерфейсе\\!*",
-            reply_markup=reply_markup,
-            parse_mode='MarkdownV2'
+            "🏍️ Добро пожаловать в магазин мото запчастей!",
+            reply_markup=reply_markup
         )
     except Exception as e:
         logging.error(f"Ошибка в show_main_menu: {e}")
 
 async def show_categories(query):
+    """Показывает категории товаров"""
     try:
         categories = get_categories()
         
@@ -503,182 +749,90 @@ async def show_categories(query):
         for cat_id, cat_name in categories:
             keyboard.append([InlineKeyboardButton(cat_name, callback_data=f"category_{cat_id}")])
         
-        keyboard.append([InlineKeyboardButton("📦 Товары под заказ", callback_data="pre_order")])
-        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_start")])
         
         await query.edit_message_text(
-            "🏍️ *Выберите категорию:*\n\n"
-            "• 🏍️ Тюнинг \\- тюнинг\\-комплекты, доработки\n"
-            "• 🛠️ Карбюраторы \\- карбюраторы и комплектующие",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='MarkdownV2'
+            "🏍️ Выберите категорию:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
         logging.error(f"Ошибка в show_categories: {e}")
 
 async def show_products(query, category_id):
+    """Показывает товары в категории"""
     try:
         products = get_products_by_category(category_id)
-        
-        if not products:
-            keyboard = [
-                [InlineKeyboardButton("📦 Заказать этот товар", callback_data="pre_order")],
-                [InlineKeyboardButton("🔙 Назад к категориям", callback_data="back_to_categories")]
-            ]
-            await query.edit_message_text(
-                "😔 В этой категории пока нет товаров в наличии\\.\n\n"
-                "📦 *Но вы можете заказать этот товар\\!*\n"
-                "⏱️ Срок изготовления: 1\\-2 месяца\n"
-                "💰 Предоплата: 30%\n\n"
-                "📞 Для заказа: \\+7 \\(918\\) 477\\-07\\-59",
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='MarkdownV2'
-            )
-            return
         
         categories = get_categories()
         category_name = next((name for id, name in categories if id == category_id), "Категория")
         
-        text = f"📦 *{category_name} \\- Товары в наличии:*\n\n"
-        
-        keyboard = []
-        for product_id, name, description, price, photo in products:
-            keyboard.append([InlineKeyboardButton(f"{name} - {price}₽", callback_data=f"product_{product_id}")])
-        
-        keyboard.append([InlineKeyboardButton("📦 Заказать другой товар", callback_data="pre_order")])
-        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
-        keyboard.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data="back_to_categories")])
+        if category_id == 1:  # Тюнинг - пустая категория
+            text = f"📦 {category_name}\n\n😔 В этой категории пока нет товаров в наличии."
+            keyboard = [
+                [InlineKeyboardButton("📦 Заказать товар", callback_data="pre_order")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="back_to_categories")]
+            ]
+        else:  # Карбюраторы
+            text = f"📦 {category_name} - Товары:\n\n"
+            keyboard = []
+            for product_id, name, description, price, photo in products:
+                keyboard.append([InlineKeyboardButton(f"🛒 {name} - {price}₽", callback_data=f"product_{product_id}")])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_categories")])
         
         await query.edit_message_text(
             text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='MarkdownV2'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
         logging.error(f"Ошибка в show_products: {e}")
 
-async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Прямой доступ к каталогу через команду"""
-    await show_categories_direct(update)
-
-async def show_categories_direct(update: Update):
-    """Показ категорий напрямую из команды"""
+async def show_product(query, product_id):
+    """Показывает информацию о товаре"""
     try:
-        web_app_button = InlineKeyboardButton(
-            "🛍️ Открыть магазин", 
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
+        product = get_product_by_id(product_id)
+        if not product:
+            await query.answer("❌ Товар не найден", show_alert=True)
+            return
         
-        categories = get_categories()
+        product_id, name, description, price, photo, category_name = product
         
-        keyboard = []
-        for cat_id, cat_name in categories:
-            keyboard.append([InlineKeyboardButton(cat_name, callback_data=f"category_{cat_id}")])
+        buy_button = InlineKeyboardButton(f"🛒 Купить за {price}₽", callback_data=f"buy_{product_id}")
         
-        keyboard.append([web_app_button])
-        keyboard.append([InlineKeyboardButton("📦 Товары под заказ", callback_data="pre_order")])
-        keyboard.append([InlineKeyboardButton("🛒 Наш Avito", url=AVITO_PROFILE_URL)])
-        keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_start")])
+        keyboard = [
+            [buy_button],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"category_2")]
+        ]
         
-        await update.message.reply_text(
-            "🏍️ *Выберите категорию:*\n\n"
-            "• 🏍️ Тюнинг \\- тюнинг\\-комплекты, доработки\n"
-            "• 🛠️ Карбюраторы \\- карбюраторы и комплектующие\n\n"
-            "🎯 *Или откройте красивый магазин через Web App\\!*",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='MarkdownV2'
-        )
-    except Exception as e:
-        logging.error(f"Ошибка в show_categories_direct: {e}")
-
-async def web_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда для быстрого доступа к Web App"""
-    try:
-        web_app_button = InlineKeyboardButton(
-            "🛍️ Открыть магазин", 
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        reply_markup = InlineKeyboardMarkup([[web_app_button]])
-        
-        await update.message.reply_text(
-            "🎯 *Откройте наш интернет\\-магазин в Telegram\\!*\n\n"
-            "В магазине вы найдете:\n"
-            "• 📷 Фото товаров\n"
-            "• 💰 Цены\n"
-            "• 📝 Описания\n"
-            "• 💳 Удобное оформление заказа\n\n"
-            "Нажмите кнопку ниже чтобы открыть магазин 👇",
+        await query.edit_message_text(
+            f"🏍️ *{name}*\n\n"
+            f"{description}\n\n"
+            f"💰 *Цена: {price}₽*",
             reply_markup=reply_markup,
-            parse_mode='MarkdownV2'
+            parse_mode='Markdown'
         )
+        
     except Exception as e:
-        logging.error(f"Ошибка в web_app_command: {e}")
+        logging.error(f"Ошибка в show_product: {e}")
 
-async def add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Добавление товара с AI-генерацией"""
+# === ОБРАБОТЧИК СООБЩЕНИЙ ===
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает текстовые сообщения"""
     try:
-        user_id = update.effective_user.id
-        
-        if user_id != ADMIN_ID:
-            await update.message.reply_text("❌ У вас нет прав для этой команды")
-            return
-        
-        if not context.args or len(context.args) < 3:
-            await update.message.reply_text(
-                "📝 *Использование:*\n"
-                "`/addproduct <категория_id> <название> <цена>`\n\n"
-                "*Пример:*\n"
-                "`/addproduct 2 \"Карбюратор Nibbi PWK 34 YJ\" 4500`\n\n"
-                "*Категории:*\n"
-                "1 \\- 🏍️ Тюнинг\n"
-                "2 \\- 🛠️ Карбюраторы",
-                parse_mode='MarkdownV2'
-            )
-            return
-        
-        category_id = int(context.args[0])
-        product_name = " ".join(context.args[1:-1])
-        price = int(context.args[-1])
-        
-        if category_id < 1 or category_id > 2:
-            await update.message.reply_text("❌ Неверный ID категории. Допустимые значения: 1-2")
-            return
-        
-        wait_msg = await update.message.reply_text("🤖 Генерируем описание через AI...")
-        
-        categories = get_categories()
-        category_name = next((name for id, name in categories if id == category_id), "мото запчасти")
-        
-        generator = YandexGPTGenerator(YANDEX_API_KEY, YANDEX_FOLDER_ID)
-        description = generator.generate_product_description(product_name, category_name)
-        
-        product_id = add_product_to_db(category_id, product_name, description, price)
-        
-        await wait_msg.delete()
-        
-        if product_id:
-            save_web_app_html()
-            
-            await update.message.reply_text(
-                f"✅ *Товар добавлен\\!*\n\n"
-                f"🏷️ Название: {product_name}\n"
-                f"📁 Категория: {category_name}\n"
-                f"💰 Цена: {price}₽\n"
-                f"📋 ID товара: {product_id}",
-                parse_mode='MarkdownV2'
-            )
-        else:
-            await update.message.reply_text("❌ Ошибка при добавлении товара в базу")
-            
-    except ValueError:
-        await update.message.reply_text("❌ Неверный формат цены или ID категории")
+        if context.user_data.get('waiting_for_name'):
+            await handle_name_input(update, context)
+        elif context.user_data.get('waiting_for_phone'):
+            await handle_phone_input(update, context)
+        elif context.user_data.get('waiting_for_address'):
+            await handle_address_input(update, context)
     except Exception as e:
-        logging.error(f"Ошибка в add_product: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при добавлении товара")
+        logging.error(f"Ошибка в handle_message: {e}")
 
+# === ЗАПУСК БОТА ===
 def main():
+    """Основная функция"""
     try:
         print("🔄 Инициализация базы данных...")
         if not init_db():
@@ -688,24 +842,22 @@ def main():
         print("🔄 Создание Web App HTML...")
         save_web_app_html()
         
-        print("🔄 Создание приложения...")
+        print("🔄 Запуск бота...")
         application = Application.builder().token(BOT_TOKEN).build()
         
+        # Регистрируем обработчики
         application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("webapp", web_app_command))
-        application.add_handler(CommandHandler("catalog", catalog_command))
-        application.add_handler(CommandHandler("addproduct", add_product))
         application.add_handler(CallbackQueryHandler(handle_callback))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
-        print("🟢 Мото-бот с Web App запущен!")
-        print("🤖 Бот готов к работе. Напишите /start в Telegram")
-        print("🛍️ Web App создан: index.html")
-        print("\n⚠️ ДАЛЕЕ: Загрузите файлы в GitHub репозиторий и настройте GitHub Pages")
+        print("✅ Бот запущен!")
+        print("🤖 Используйте /start для начала работы")
+        print("🌐 Web App URL:", WEB_APP_URL)
         
         application.run_polling()
         
     except Exception as e:
-        print(f"🔴 Критическая ошибка при запуске: {e}")
+        print(f"🔴 Ошибка при запуске: {e}")
 
 if __name__ == "__main__":
     main()
